@@ -24,7 +24,7 @@ extern int fileno(FILE *stream);
 
 
 char const HELP[] =
-    "Usage: scal [-mycH3o:][OPTS...] [[month] year]"                          NL
+    "Usage: scal [-mycH3o:][OPTS...] [SCAL_FILE] [[month] year]"              NL
     ""                                                                        NL
     "The cal utility writes a calendar to the standard output. European style"NL
     "monday first calendar with `-m`. Full year with `-y`. Three month `-3`." NL
@@ -54,7 +54,7 @@ char const MANUAL[] =
     "    m12       : Selects the month, from 1 to 12."                      NL
     "    20        : Mark day category, requires a month before."           NL
     "    10-20     : Mark day range to category."                           NL
-    "    *         : Add today date to category."                           NL
+    "    TODAY     : Add today date to category."                           NL
     "    l=,TXT=   : Assigns a label to the category, use any terminator."  NL
     "    %m        : Weeks start on Monday. (-m option)"                    NL
     "    %s        : Weeks start on Sunday. (-s option)"                    NL
@@ -83,21 +83,22 @@ struct cat_s {
 	bool  nice;
 };
 
-cat_t *style_day[13][32] = { 0 };
-cat_t *style_wd[7] = { 0 };
+static cat_t *style_day[13][32] = { 0 };
+static cat_t *style_wd[7] = { 0 };
 
 static cat_t  categories[10] = { 0 };
 static size_t categoriesz    = 0;
 
-unsigned g_year = 0;
-unsigned g_month;
-unsigned g_day;
+static unsigned g_year = 0;
+static unsigned g_month;
+static unsigned g_day;
 
-int monday = 0;
-int all_year = 0;
-int labels = 0;
-int use_style = 0;
-bool opt_3 = false;
+static bool opt_monday = false;
+static bool opt_all_year = false;
+static bool opt_labels = false;
+static bool opt_is_tty = false;
+static bool opt_3 = false;
+static char const *opt_file_source = NULL;
 
 /* Calculation. */
 static int   shift_left(int dw);
@@ -112,12 +113,13 @@ static void  puts_center(char *, unsigned, unsigned);
 static void  blank_string(char *buf, size_t buflen);
 static void  puts_trim(char *);
 static int   xatoi(char const *s);
+static char const *fsuffix(char const *f);
 
 /* Styling. */
 static char const *get_escapes(char const *name);
 static cat_t      *get_category(char const *catname);
-static void        read_settings(char source[], char settings[]);
-static void        read_settings_file(char file[], bool required);
+static void        read_settings(char const source[], char settings[]);
+static void        read_settings_file(char const file[], bool required);
 static char const *get_colors(int month, int day, int wd);
 
 
@@ -138,9 +140,9 @@ main(int argc, char *argv[])
 	}
 
 	#ifdef __unix__
-	use_style = isatty(fileno(stdout));
+	opt_is_tty = isatty(fileno(stdout));
 	#else
-	use_style = 1;
+	opt_is_tty = 1;
 	#endif
 
 	int opt;
@@ -148,12 +150,12 @@ main(int argc, char *argv[])
 	while((opt = getopt(argc, argv, "o:mslcy3")) != -1) {
 		switch (opt) {
 		case 'o': opt_o = optarg; break;
-		case 'm': monday = 1; break;
-		case 's': monday = 0; break;
-		case 'l': labels = 1; break;
-		case 'c': use_style = 1; break;
-		case 'y': all_year = 1; break;
-		case '3': opt_3 = true; all_year = 1; break;
+		case 'm': opt_monday = true; break;
+		case 's': opt_monday = false; break;
+		case 'l': opt_labels = true; break;
+		case 'c': opt_is_tty = true; break;
+		case 'y': opt_all_year = true; break;
+		case '3': opt_3 = true; opt_all_year = true; break;
 		case '?':
 		default:
 			return 1;
@@ -163,6 +165,11 @@ main(int argc, char *argv[])
 	time_t now;
 	time(&now);
 	struct tm *ptm = localtime(&now);
+
+	if (argv[optind] && !strcmp(fsuffix(argv[optind]),".scal")) {
+		opt_file_source = argv[optind++];
+		opt_all_year = true;
+	}
 
 	char *arg1 = argv[optind];
 	char *arg2 = (arg1)?argv[optind+1]:NULL;
@@ -178,7 +185,7 @@ main(int argc, char *argv[])
 			return 1;
 		}
 		g_day = 0;
-		all_year = 0;
+		opt_all_year = false;
 	} else if (arg1) {
 		g_year = xatoi(arg1);
 		if (g_year < 1) {
@@ -187,7 +194,7 @@ main(int argc, char *argv[])
 		}
 		g_month = 0;
 		g_day = 0;
-		all_year = 1;
+		opt_all_year = true;
 	} else {
 		g_year = ptm->tm_year + 1900;
 		g_month = ptm->tm_mon + 1;
@@ -214,10 +221,16 @@ main(int argc, char *argv[])
 	if (env_scal_info) {
 		read_settings("$SCAL_INFO", env_scal_info);
 	}
-
 	/* 4. Argument -o */
 	if (opt_o) {
 		read_settings("-o", opt_o);
+	}
+
+	/* Select calendar. */
+	if (opt_file_source) {
+		char const *p = opt_file_source;
+		opt_file_source = NULL;
+		read_settings_file(p, true);
 	}
 
 	char *month_names[12]; 
@@ -239,7 +252,7 @@ main(int argc, char *argv[])
 		strncpy(day_headings + i * 3, buf, 2);
 	}
 
-	if (!all_year) {
+	if (!opt_all_year) {
 		
 		unsigned row, len, days[MAXDAYS];
 		unsigned *dp = days;
@@ -302,7 +315,7 @@ main(int argc, char *argv[])
 		}
 	}
 
-	if (labels && use_style) {
+	if (opt_labels && opt_is_tty) {
 		for (size_t i=0; i<categoriesz; i++) {
 			if (categories[i].style) {
 				printf("%s%s%s ",
@@ -363,7 +376,7 @@ get_category(char const *catname)
 }
 
 static void
-read_settings(char source[], char settings[])
+read_settings(char const source[], char settings[])
 {
 	char            *dash;
 	static cat_t    *sel_category = NULL;
@@ -371,7 +384,19 @@ read_settings(char source[], char settings[])
 	static unsigned  sel_month    = 0;
 	int              number;
 	for (char *w = strtok(settings, ", \n\t\r"); w; w = strtok(NULL, ", \n\t\r")) {
-		if (w[0] == '@') { /* Category. */
+		if (w[0] == '%') { /* Global options. */
+			if (w[1] == 'm') {
+				opt_monday = true;
+			} else if (w[1] == 's') {
+				opt_monday = false;
+			} else if (w[1] == 'l') {
+				if (opt_all_year && !opt_3) {
+					opt_labels = true;
+				}
+			}
+		} else if (opt_file_source) {
+			/* Only read global options from environment. */
+		} else if (w[0] == '@') { /* Category. */
 			sel_category = get_category(w+1);
 			sel_year     = g_year;
 			sel_month    = 0;
@@ -390,16 +415,6 @@ read_settings(char source[], char settings[])
 			} else {
 				errorf("%s: %s: Valid months are from 1 to 12", source, w);
 			}
-		} else if (w[0] == '%') { /* Global options. */
-			if (w[1] == 'm') {
-				monday = 1;
-			} else if (w[1] == 's') {
-				monday = 0;
-			} else if (w[1] == 'l') {
-				if (all_year && !opt_3) {
-					labels = 1;
-				}
-			}
 		} else if (!sel_category) {
 			errorf("%s: %s: Specify a category with '@' before.", source, w);
 		} else if (w[0] == ':') { /* Category style. */
@@ -413,7 +428,7 @@ read_settings(char source[], char settings[])
 			sel_category->label = xstrdup(strtok(NULL, sep));
 		} else if (sel_year != g_year) {
 			/* Do nothing, the year doesn't match. */
-		} else if (w[0] == '*') { /* Today. */
+		} else if (!strcmp(w, "TODAY")) { /* Today. */
 			style_day[g_month][g_day] = sel_category;
 		} else if (w[0] == 'w') { /* Weekday. */
 			style_wd[xatoi(w+1)] = sel_category;
@@ -444,7 +459,7 @@ read_settings(char source[], char settings[])
 }
 
 static void
-read_settings_file(char file[], bool required)
+read_settings_file(char const file[], bool required)
 {
 	FILE *fp = fopen(file, "rb");
 	if (!fp && required) {
@@ -468,7 +483,7 @@ read_settings_file(char file[], bool required)
 static char const *
 get_colors(int month, int day, int wd)
 {
-	if (!use_style) {
+	if (!opt_is_tty) {
 		return NULL;
 	}
 	cat_t *c1 = style_day[month][day];
@@ -492,13 +507,13 @@ get_colors(int month, int day, int wd)
 static int
 shift_left(int dw)
 {
-	return monday ? (dw-1)%7 : dw;
+	return opt_monday ? (dw-1)%7 : dw;
 }
 
 static int
 shift_right(int dw)
 {
-	return monday ? (dw+1)%7 : dw;
+	return opt_monday ? (dw+1)%7 : dw;
 }
 
 static int
@@ -610,12 +625,12 @@ build_row(char *p, unsigned *dp, unsigned month)
 			}
 			*(p++) = day % 10 + '0';
 			if (month == g_month && day == g_day) {
-				if (use_style) {
+				if (opt_is_tty) {
 					strcpy(p, "\x1b[7m\x1b[1m");
 					p += strlen("\x1b[7m\x1b[1m");
 				}
 				*(p++) = '<';
-				if (use_style) {
+				if (opt_is_tty) {
 					strcpy(p, "\x1b[0m");
 					p += strlen("\x1b[0m");
 				}
@@ -705,4 +720,17 @@ puts_trim(char *s)
 	}
 
 	puts(s);
+}
+
+static char const *
+fsuffix(char const *f)
+{
+	char const *suffix = "";
+	while (*f) {
+		if (*f == '.') {
+			suffix = f;
+		}
+		f++;
+	}
+	return suffix;
 }

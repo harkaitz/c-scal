@@ -17,9 +17,8 @@ clean:
 install:
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(PROGS) $(DESTDIR)$(PREFIX)/bin
-	rm -f $(DESTDIR)$(PREFIX)/bin/cal
-	ln -s scal $(DESTDIR)$(PREFIX)/bin/cal
-	ln -s scal.1 $(DESTDIR)$(PREFIX)/share/man/man1/cal.1
+	rm -f $(DESTDIR)$(PREFIX)/bin/cal; ln -s scal $(DESTDIR)$(PREFIX)/bin/cal
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/cal.1; ln -s scal.1 $(DESTDIR)$(PREFIX)/share/man/man1/cal.1
 check:
 scal$(EXE): scal.c
 	$(CC) -o $@ scal.c $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(LIBS)
