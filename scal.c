@@ -9,7 +9,7 @@
 #include <stdbool.h>
 
 #define NL "\n"
-#define URL_REPO "https://github.com/harkaitz/scal"
+#define URL_REPO "https://github.com/harkaitz/c-scal"
 
 #ifdef __unix__
 extern int isatty(int fd);
@@ -33,6 +33,7 @@ char const HELP[] =
     "extended help by running `scal -H`. When piping force colors with `-c`." NL
     ""                                                                        NL
     "Copyright (c) 2026 Harkaitz Agirre Ezama, GPLv2 licensed."               NL
+    URL_REPO                                                                  NL
     ;
 
 char const MANUAL[] = 
