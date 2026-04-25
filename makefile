@@ -14,6 +14,7 @@ PROGS      =scal$(EXE)
 
 all: $(PROGS)
 clean:
+	rm -f $(PROGS)
 install:
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(PROGS) $(DESTDIR)$(PREFIX)/bin

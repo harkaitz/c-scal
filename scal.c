@@ -1,3 +1,6 @@
+#ifdef __unix__
+#  define _POSIX_C_SOURCE 200809L
+#endif
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,8 +15,6 @@
 #define URL_REPO "https://github.com/harkaitz/c-scal"
 
 #ifdef __unix__
-extern int isatty(int fd);
-extern int fileno(FILE *stream);
 #define WIN_UNIX(WIN,UNIX) UNIX
 #endif
 
