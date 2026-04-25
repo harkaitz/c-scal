@@ -50,7 +50,7 @@ char const MANUAL[] =
     "    :STYLE    : Sets the style for the category."                      NL
     "    !nice     : Weekday style prevails to category."                   NL
     "    y2020     : Select a year, for year dependent days."               NL
-    "    w0,w6     : Weekday (0: Sunday, 1: Monday)."
+    "    w0,w6     : Weekday (0: Sunday, 1: Monday)."                       NL
     "    m12       : Selects the month, from 1 to 12."                      NL
     "    20        : Mark day category, requires a month before."           NL
     "    10-20     : Mark day range to category."                           NL
@@ -290,13 +290,13 @@ main(int argc, char *argv[])
 		}
 		blank_string(lineout, sizeof(lineout));
 		week_len = WEEK_LEN;
-		for (unsigned month = 0; month < 12; month += (opt_3)?1:3) {
-			if (opt_3 && (month+2)!=g_month) {
+		for (unsigned month = 1; month <= 12; month += 3) {
+			if (opt_3 && (month-1) != g_month && month != g_month && (month+1) != g_month) {
 				continue;
 			}
+			puts_center(month_names[month - 1], week_len, HEAD_SEP);
 			puts_center(month_names[month]    , week_len, HEAD_SEP);
-			puts_center(month_names[month + 1], week_len, HEAD_SEP);
-			puts_center(month_names[month + 2], week_len, 0);
+			puts_center(month_names[month + 1], week_len, 0);
 			printf("\n%s%*s%s", day_headings, HEAD_SEP, "", day_headings);
 			printf("%*s%s", HEAD_SEP, "", day_headings);
 			putchar('\n');
@@ -304,8 +304,8 @@ main(int argc, char *argv[])
 				lineout[0]='\0';
 				char *p = lineout;
 				for (which_cal = 0; which_cal < 3; which_cal++) {
-					dp = days[month + which_cal] + row;
-					p = build_row(p, dp, (month+1+which_cal));
+					dp = days[month + which_cal - 1] + row;
+					p = build_row(p, dp, (month+which_cal));
 					*(p++) = ' ';
 					*p = '\0';
 				}
