@@ -17,6 +17,7 @@ supports categorizing days and coloring them.
 - *-y* : Display the full year.
 - *-c* : Force colored output.
 - *-3* : Display 3 months.
+- *-L* : Print a list, good for scripting.
 
 # Options
 

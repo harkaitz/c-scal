@@ -25,13 +25,14 @@
 
 
 char const HELP[] =
-    "Usage: scal [-mycH3o:][OPTS...] [SCAL_FILE] [[month] year]"              NL
+    "Usage: scal [-mycH3o:lL][OPTS...] [SCAL_FILE] [[month] year]"            NL
     ""                                                                        NL
     "The cal utility writes a calendar to the standard output. European style"NL
     "monday first calendar with `-m`. Full year with `-y`. Three month `-3`." NL
     ""                                                                        NL
     "The program supports categorizing days and coloring them. Read the"      NL
     "extended help by running `scal -H`. When piping force colors with `-c`." NL
+    "List mode with `-L`."                                                    NL
     ""                                                                        NL
     "Copyright (c) 2026 Harkaitz Agirre Ezama, GPLv2 licensed."               NL
     URL_REPO                                                                  NL
@@ -94,6 +95,7 @@ static size_t categoriesz    = 0;
 static unsigned g_year = 0;
 static unsigned g_month;
 static unsigned g_day;
+static unsigned g_wd;
 
 static bool opt_monday = false;
 static bool opt_all_year = false;
@@ -101,6 +103,7 @@ static bool opt_labels = false;
 static bool opt_is_tty = false;
 static bool opt_3 = false;
 static char const *opt_file_source = NULL;
+static bool opt_list_mode = false;
 
 /* Calculation. */
 static int   shift_left(int dw);
@@ -123,6 +126,7 @@ static cat_t      *get_category(char const *catname);
 static void        read_settings(char const source[], char settings[]);
 static void        read_settings_file(char const file[], bool required);
 static char const *get_colors(int month, int day, int wd);
+static char const *get_category_name(int month, int day, int wd);
 
 
 #define	WEEK_LEN	20	/* 7 * 3 - one space at the end */
@@ -149,7 +153,7 @@ main(int argc, char *argv[])
 
 	int opt;
 	char *opt_o = NULL;
-	while((opt = getopt(argc, argv, "o:mslcy3")) != -1) {
+	while((opt = getopt(argc, argv, "o:mslcy3L")) != -1) {
 		switch (opt) {
 		case 'o': opt_o = optarg; break;
 		case 'm': opt_monday = true; break;
@@ -158,6 +162,7 @@ main(int argc, char *argv[])
 		case 'c': opt_is_tty = true; break;
 		case 'y': opt_all_year = true; break;
 		case '3': opt_3 = true; opt_all_year = true; break;
+		case 'L': opt_list_mode = true; break;
 		case '?':
 		default:
 			return 1;
@@ -201,6 +206,7 @@ main(int argc, char *argv[])
 		g_year = ptm->tm_year + 1900;
 		g_month = ptm->tm_mon + 1;
 		g_day = ptm->tm_mday;
+		g_wd = ptm->tm_wday;
 	}
 
 	/* 1. /etc/calendar.scal */
@@ -254,7 +260,9 @@ main(int argc, char *argv[])
 		strncpy(day_headings + i * 3, buf, 2);
 	}
 
-	if (!opt_all_year) {
+	if (!opt_all_year && opt_list_mode) {
+		printf("%s\n", get_category_name(g_month, g_day, g_wd));
+	} else if (!opt_all_year) {
 		
 		unsigned row, len, days[MAXDAYS];
 		unsigned *dp = days;
@@ -271,6 +279,21 @@ main(int argc, char *argv[])
 			build_row(lineout, dp, g_month)[0] = '\0';
 			dp += 7;
 			puts_trim(lineout);
+		}
+	} else if (opt_list_mode) {
+		for (unsigned month = 1; month <= 12; month++) {
+			unsigned days[MAXDAYS] = { SPACE };
+			days[MAXDAYS-1] = '\0';
+			day_array(month, g_year, days);
+			for (unsigned int i=0; i<MAXDAYS; i++) {
+				if (days[i]!=SPACE) {
+					printf(
+					    "%i-%0i-%0i %s\n",
+					    g_year, month, days[i],
+					    get_category_name(month, days[i], (i%7))
+					);
+				}
+			}
 		}
 	} else {
 		unsigned row, which_cal, week_len, days[12][MAXDAYS];
@@ -317,7 +340,7 @@ main(int argc, char *argv[])
 		}
 	}
 
-	if (opt_labels && opt_is_tty) {
+	if (opt_labels && opt_is_tty && !opt_list_mode) {
 		for (size_t i=0; i<categoriesz; i++) {
 			if (categories[i].style) {
 				printf("%s%s%s ",
@@ -499,7 +522,22 @@ get_colors(int month, int day, int wd)
 	} else {
 		return NULL;
 	}
-	return NULL;
+}
+
+static char const *
+get_category_name(int month, int day, int wd)
+{
+	cat_t *c1 = style_day[month][day];
+	cat_t *c2 = style_wd[shift_right(wd)];
+	if (c1 && c2 && c1->nice) {
+		return c2->name;
+	} else if (c1) {
+		return c1->name;
+	} else if (c2) {
+		return c2->name;
+	} else {
+		return "default";
+	}
 }
 
 /* --------------------------------------------------------------------------
