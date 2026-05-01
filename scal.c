@@ -243,7 +243,7 @@ main(int argc, char *argv[])
 
 	char *month_names[12]; 
 	for (unsigned i=0; i<12; i++) {
-		struct tm zero_tm;
+		struct tm zero_tm = {0};
 		char buf[40];
 		zero_tm.tm_mon = i;
 		strftime(buf, sizeof(buf), "%B", &zero_tm);
@@ -253,7 +253,7 @@ main(int argc, char *argv[])
 	char day_headings[28]; /* "Su Mo Tu We Th Fr Sa" */
 	blank_string(day_headings, sizeof(day_headings) - 7);
 	for (unsigned i=0; i<7; i++) {
-		struct tm zero_tm;
+		struct tm zero_tm = {0};
 		char buf[40];
 		zero_tm.tm_wday = shift_right(i);
 		strftime(buf, sizeof(buf), "%a", &zero_tm);
@@ -282,13 +282,12 @@ main(int argc, char *argv[])
 		}
 	} else if (opt_list_mode) {
 		for (unsigned month = 1; month <= 12; month++) {
-			unsigned days[MAXDAYS] = { SPACE };
-			days[MAXDAYS-1] = '\0';
+			unsigned days[MAXDAYS];
 			day_array(month, g_year, days);
 			for (unsigned int i=0; i<MAXDAYS; i++) {
 				if (days[i]!=SPACE) {
 					printf(
-					    "%i-%0i-%0i %s\n",
+					    "%i-%02i-%02i %s\n",
 					    g_year, month, days[i],
 					    get_category_name(month, days[i], (i%7))
 					);
@@ -316,7 +315,7 @@ main(int argc, char *argv[])
 		blank_string(lineout, sizeof(lineout));
 		week_len = WEEK_LEN;
 		for (unsigned month = 1; month <= 12; month += 3) {
-			if (opt_3 && (month-1) != g_month && month != g_month && (month+1) != g_month) {
+			if (opt_3 && month != g_month && (month+1) != g_month && (month+2) != g_month) {
 				continue;
 			}
 			puts_center(month_names[month - 1], week_len, HEAD_SEP);
@@ -408,6 +407,9 @@ read_settings(char const source[], char settings[])
 	static unsigned  sel_year     = 0;
 	static unsigned  sel_month    = 0;
 	int              number;
+	if (!sel_year) {
+		sel_year = g_year;
+	}
 	for (char *w = strtok(settings, ", \n\t\r"); w; w = strtok(NULL, ", \n\t\r")) {
 		if (w[0] == '%') { /* Global options. */
 			if (w[1] == 'm') {
@@ -423,7 +425,6 @@ read_settings(char const source[], char settings[])
 			/* Only read global options from environment. */
 		} else if (w[0] == '@') { /* Category. */
 			sel_category = get_category(w+1);
-			sel_year     = g_year;
 			sel_month    = 0;
 		} else if (w[0] == 'y') { /* Year. */
 			number = xatoi(w+1);
@@ -725,6 +726,7 @@ static int
 xatoi(char const *s)
 {
 	while (*s == '0') s++;
+	if (*s=='\0')  return 0;
 	return atoi(s);
 }
 
